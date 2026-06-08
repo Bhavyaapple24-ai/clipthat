@@ -21,8 +21,8 @@ final class CaptureEngine: NSObject, SCStreamOutput, SCStreamDelegate {
     private var firstFrameTime: CMTime?
     private var lastFrameTime: CMTime?
 
-    private let videoQueue = DispatchQueue(label: "com.macmedal.capture.video")
-    private let audioQueue = DispatchQueue(label: "com.macmedal.capture.audio")
+    private let videoQueue = DispatchQueue(label: "com.afterclip.capture.video")
+    private let audioQueue = DispatchQueue(label: "com.afterclip.capture.audio")
 
     // MARK: - Content enumeration
 

@@ -51,8 +51,8 @@ final class ReplayBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
     // Video and audio get SEPARATE queues. Video frames trigger heavy hardware-encode
     // submission; if audio shared that queue it would be starved and ScreenCaptureKit would
     // drop most audio buffers. The ring is protected by `lock`, so separate queues are safe.
-    private let videoQueue = DispatchQueue(label: "com.macmedal.replay.video")
-    private let audioQueue = DispatchQueue(label: "com.macmedal.replay.audio")
+    private let videoQueue = DispatchQueue(label: "com.afterclip.replay.video")
+    private let audioQueue = DispatchQueue(label: "com.afterclip.replay.audio")
 
     init(bufferSeconds: Double, outputDir: URL, bitrateMbps: Int = 25) {
         self.bufferSeconds = bufferSeconds
@@ -66,7 +66,7 @@ final class ReplayBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
         let content = try await SCShareableContent.excludingDesktopWindows(
             false, onScreenWindowsOnly: true)
         guard let display = content.displays.first else {
-            throw NSError(domain: "MacMedal", code: 1,
+            throw NSError(domain: "Afterclip", code: 1,
                           userInfo: [NSLocalizedDescriptionKey: "No display to capture."])
         }
 
@@ -431,7 +431,7 @@ final class ReplayBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
                                         sourceFormatHint: hint)
         vInput.expectsMediaDataInRealTime = false
         guard writer.canAdd(vInput) else {
-            throw NSError(domain: "MacMedal", code: 3,
+            throw NSError(domain: "Afterclip", code: 3,
                 userInfo: [NSLocalizedDescriptionKey: "Writer rejected video input."])
         }
         writer.add(vInput)
@@ -449,7 +449,7 @@ final class ReplayBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
 
         Log.write("writeClip: first video sample isKeyframe=\(isKeyframe(video[0])), startWriting…")
         guard writer.startWriting() else {
-            throw writer.error ?? NSError(domain: "MacMedal", code: 4,
+            throw writer.error ?? NSError(domain: "Afterclip", code: 4,
                 userInfo: [NSLocalizedDescriptionKey: "startWriting() returned false."])
         }
         writer.startSession(atSourceTime: startPTS)
@@ -459,21 +459,21 @@ final class ReplayBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
         // sequentially deadlocks. Running both at once lets the writer interleave normally.
         if hasAudio {
             async let vOK = feed(input: vInput, samples: video, writer: writer,
-                                 on: DispatchQueue(label: "com.macmedal.writer.v"), label: "video")
+                                 on: DispatchQueue(label: "com.afterclip.writer.v"), label: "video")
             async let aOK = feed(input: aInput, samples: audio, writer: writer,
-                                 on: DispatchQueue(label: "com.macmedal.writer.a"), label: "audio")
+                                 on: DispatchQueue(label: "com.afterclip.writer.a"), label: "audio")
             let (v, a) = await (vOK, aOK)
             Log.write("writeClip: video ok=\(v) audio ok=\(a) status=\(writer.status.rawValue) err=\(writer.error?.localizedDescription ?? "nil")")
         } else {
             let v = await feed(input: vInput, samples: video, writer: writer,
-                               on: DispatchQueue(label: "com.macmedal.writer.v"), label: "video")
+                               on: DispatchQueue(label: "com.afterclip.writer.v"), label: "video")
             Log.write("writeClip: video-only ok=\(v) status=\(writer.status.rawValue) err=\(writer.error?.localizedDescription ?? "nil")")
         }
 
         await writer.finishWriting()
         Log.write("writeClip: finish status=\(writer.status.rawValue) error=\(writer.error?.localizedDescription ?? "nil")")
         if writer.status != .completed {
-            throw writer.error ?? NSError(domain: "MacMedal", code: 2,
+            throw writer.error ?? NSError(domain: "Afterclip", code: 2,
                 userInfo: [NSLocalizedDescriptionKey: "AVAssetWriter did not complete (status \(writer.status.rawValue))."])
         }
     }

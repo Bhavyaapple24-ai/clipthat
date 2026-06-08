@@ -1,7 +1,7 @@
 #!/bin/bash
-# Build Mac Medal as a proper .app bundle (menu-bar app) and ad-hoc code-sign it.
+# Build Afterclip as a proper .app bundle (menu-bar app) and ad-hoc code-sign it.
 # A real app bundle is what gives ScreenCaptureKit a stable capture connection and its
-# own "Mac Medal" entry in Privacy & Security ▸ Screen & System Audio Recording.
+# own "Afterclip" entry in Privacy & Security ▸ Screen & System Audio Recording.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -10,22 +10,22 @@ cd "$ROOT"
 echo "▸ Building release binary…"
 swift build -c release
 
-APP="$ROOT/Mac Medal.app"
+APP="$ROOT/Afterclip.app"
 CONTENTS="$APP/Contents"
 echo "▸ Assembling $APP"
 rm -rf "$APP"
 mkdir -p "$CONTENTS/MacOS" "$CONTENTS/Resources"
-cp ".build/release/MacMedal" "$CONTENTS/MacOS/MacMedal"
+cp ".build/release/Afterclip" "$CONTENTS/MacOS/Afterclip"
 
 cat > "$CONTENTS/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleExecutable</key>           <string>MacMedal</string>
-    <key>CFBundleIdentifier</key>           <string>com.macmedal.app</string>
-    <key>CFBundleName</key>                 <string>Mac Medal</string>
-    <key>CFBundleDisplayName</key>          <string>Mac Medal</string>
+    <key>CFBundleExecutable</key>           <string>Afterclip</string>
+    <key>CFBundleIdentifier</key>           <string>com.afterclip.app</string>
+    <key>CFBundleName</key>                 <string>Afterclip</string>
+    <key>CFBundleDisplayName</key>          <string>Afterclip</string>
     <key>CFBundlePackageType</key>          <string>APPL</string>
     <key>CFBundleShortVersionString</key>   <string>0.1.0</string>
     <key>CFBundleVersion</key>              <string>1</string>
@@ -33,7 +33,7 @@ cat > "$CONTENTS/Info.plist" <<'PLIST'
     <key>LSUIElement</key>                  <true/>
     <key>NSHighResolutionCapable</key>      <true/>
     <key>CFBundleIconFile</key>             <string>AppIcon</string>
-    <key>NSMicrophoneUsageDescription</key> <string>Mac Medal records game audio for your clips.</string>
+    <key>NSMicrophoneUsageDescription</key> <string>Afterclip records game audio for your clips.</string>
 </dict>
 </plist>
 PLIST
@@ -54,9 +54,9 @@ fi
 # Prefer the stable self-signed identity (so Screen Recording permission persists across
 # rebuilds). It's untrusted, so we resolve it by its unique hash and sign by that (signing
 # with an untrusted self-signed cert is fine and still yields a stable identity for TCC).
-HASH="$(security find-identity -p codesigning 2>/dev/null | awk '/Mac Medal Dev/{print $2; exit}')"
+HASH="$(security find-identity -p codesigning 2>/dev/null | awk '/Afterclip Dev/{print $2; exit}')"
 if [ -n "$HASH" ]; then
-    echo "▸ Code signing with stable identity 'Mac Medal Dev' ($HASH)…"
+    echo "▸ Code signing with stable identity 'Afterclip Dev' ($HASH)…"
     codesign --force --deep --sign "$HASH" "$APP"
 else
     echo "▸ Ad-hoc code signing (run scripts/setup-signing.sh for a stable signature)…"

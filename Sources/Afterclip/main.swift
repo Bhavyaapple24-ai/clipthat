@@ -1,15 +1,15 @@
 import Foundation
 import AppKit
 
-// Mac Medal — instant-replay game clipper for macOS.
+// Afterclip — instant-replay game clipper for macOS.
 //
 // Launched as the .app (no arguments) -> menu-bar app with global hotkey ⌥⌘C.
 // Debug commands (run from terminal):
-//   swift run MacMedal list           -> list displays / apps / windows
-//   swift run MacMedal test [secs]    -> smoke capture, measure FPS + confirm audio
-//   swift run MacMedal record [secs]  -> record a real .mp4 (game video + game audio)
-//   swift run MacMedal autoclip [s]   -> fill buffer, auto-save, reveal in Finder
-//   swift run MacMedal replay [secs]  -> instant-replay buffer; press Enter to save last N secs
+//   swift run Afterclip list           -> list displays / apps / windows
+//   swift run Afterclip test [secs]    -> smoke capture, measure FPS + confirm audio
+//   swift run Afterclip record [secs]  -> record a real .mp4 (game video + game audio)
+//   swift run Afterclip autoclip [s]   -> fill buffer, auto-save, reveal in Finder
+//   swift run Afterclip replay [secs]  -> instant-replay buffer; press Enter to save last N secs
 
 let args = CommandLine.arguments
 let debugCommands: Set<String> = ["list", "test", "record", "autoclip", "replay"]
@@ -39,14 +39,14 @@ do {
         let stamp = ISO8601DateFormatter().string(from: Date())
             .replacingOccurrences(of: ":", with: "-")
         let url = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Movies/MacMedal/clip-\(stamp).mp4")
+            .appendingPathComponent("Movies/Afterclip/clip-\(stamp).mp4")
         let recorder = Recorder(outputURL: url)
         try await recorder.start(seconds: secs)
     case "autoclip":
         // Zero-interaction test: run buffer, wait, auto-save, reveal in Finder, exit.
         let warmup = args.count > 2 ? (Double(args[2]) ?? 12) : 12
         let dir = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Movies/MacMedal")
+            .appendingPathComponent("Movies/Afterclip")
         let buffer = ReplayBuffer(bufferSeconds: 30, outputDir: dir)
         try await buffer.start()
         print("🔴 Buffer running. Filling for \(Int(warmup))s, then auto-saving…")
@@ -73,7 +73,7 @@ do {
     case "replay":
         let bufSecs = args.count > 2 ? (Double(args[2]) ?? 30) : 30
         let dir = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Movies/MacMedal")
+            .appendingPathComponent("Movies/Afterclip")
         let buffer = ReplayBuffer(bufferSeconds: bufSecs, outputDir: dir)
         try await buffer.start()
         print("""

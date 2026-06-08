@@ -16,7 +16,7 @@ struct Settings: Codable {
 
     static let fileURL: URL = FileManager.default
         .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        .appendingPathComponent("MacMedal", isDirectory: true)
+        .appendingPathComponent("Afterclip", isDirectory: true)
         .appendingPathComponent("settings.json")
 
     static func load() -> Settings {

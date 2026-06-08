@@ -17,7 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var settings = Settings.load()
     private lazy var clipsDir: URL = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent("Movies/MacMedal")
+        .appendingPathComponent("Movies/Afterclip")
 
     private lazy var statusMenuItem = NSMenuItem(title: "Starting…", action: nil, keyEquivalent: "")
     private var saveMenuItem: NSMenuItem?
@@ -51,7 +51,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
             button.image = NSImage(systemSymbolName: "record.circle",
-                                   accessibilityDescription: "Mac Medal")
+                                   accessibilityDescription: "Afterclip")
             button.image?.isTemplate = true
         }
 
@@ -115,7 +115,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(openFolder)
 
         menu.addItem(.separator())
-        let quit = NSMenuItem(title: "Quit Mac Medal", action: #selector(quit), keyEquivalent: "q")
+        let quit = NSMenuItem(title: "Quit Afterclip", action: #selector(quit), keyEquivalent: "q")
         quit.target = self
         menu.addItem(quit)
 
@@ -149,7 +149,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             : "⏸ Reconnecting…"
         if let button = statusItem.button {
             button.image = NSImage(systemSymbolName: running ? "record.circle.fill" : "record.circle",
-                                   accessibilityDescription: "Mac Medal")
+                                   accessibilityDescription: "Afterclip")
             button.image?.isTemplate = true
         }
     }
@@ -181,7 +181,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     if self.settings.autoUpload { self.upload(url) }
                 } else {
                     self.notify(title: "Couldn’t save clip",
-                                body: "Buffer may still be filling. See macmedal.log for details.")
+                                body: "Buffer may still be filling. See afterclip.log for details.")
                 }
             }
         }
@@ -277,13 +277,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func showCaptureError(_ error: Error) {
         statusMenuItem.title = "⚠️ Capture unavailable"
         let alert = NSAlert()
-        alert.messageText = "Mac Medal can't record the screen"
+        alert.messageText = "Afterclip can't record the screen"
         alert.informativeText = """
         \(error.localizedDescription)
 
         Grant permission in:
         System Settings ▸ Privacy & Security ▸ Screen & System Audio Recording
-        Enable “Mac Medal”, then quit and reopen the app.
+        Enable “Afterclip”, then quit and reopen the app.
         """
         alert.addButton(withTitle: "Open Settings")
         alert.addButton(withTitle: "Later")

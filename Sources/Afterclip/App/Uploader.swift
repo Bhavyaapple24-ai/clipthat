@@ -26,14 +26,14 @@ enum Uploader {
         let size = (try? FileManager.default.attributesOfItem(atPath: fileURL.path)[.size] as? Int) ?? 0
         if size > maxBytes { throw UploadError.tooLarge(size) }
 
-        let boundary = "MacMedal-\(UUID().uuidString)"
+        let boundary = "Afterclip-\(UUID().uuidString)"
         let bodyURL = try buildMultipartBody(fileURL: fileURL, boundary: boundary)
         defer { try? FileManager.default.removeItem(at: bodyURL) }
 
         var req = URLRequest(url: URL(string: "https://catbox.moe/user/api.php")!)
         req.httpMethod = "POST"
         req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        req.setValue("MacMedal/0.1", forHTTPHeaderField: "User-Agent")
+        req.setValue("Afterclip/0.1", forHTTPHeaderField: "User-Agent")
         req.timeoutInterval = 600
 
         let (data, response) = try await URLSession.shared.upload(for: req, fromFile: bodyURL)

@@ -2,7 +2,7 @@
 import PackageDescription
 
 let package = Package(
-    name: "MacMedal",
+    name: "Afterclip",
     platforms: [
         // 14.2+ is required for per-application audio capture via ScreenCaptureKit.
         // We target 15 to get the newest, most stable SCStream APIs.
@@ -10,8 +10,8 @@ let package = Package(
     ],
     targets: [
         .executableTarget(
-            name: "MacMedal",
-            path: "Sources/MacMedal",
+            name: "Afterclip",
+            path: "Sources/Afterclip",
             swiftSettings: [
                 .swiftLanguageMode(.v5)
             ]
