@@ -1,0 +1,17 @@
+# Build artifacts
+.build/
+*.app/
+DerivedData/
+
+# Generated icon (created from icon.png at build time)
+**/AppIcon.icns
+
+# macOS
+.DS_Store
+
+# Local logs / clips (these live in ~/Movies and ~/Library, but ignore if any land here)
+*.log
+*.mp4
+
+# Claude Code local settings
+.claude/
