@@ -34,7 +34,7 @@ rebuilds the capture, so the replay buffer starts refilling from zero.
 
 ## Requirements
 
-- macOS **14.2 or newer** (per-app audio APIs; built & tested on macOS 26)
+- macOS **15 (Sequoia) or newer** (built & tested on macOS 26)
 - **Xcode Command Line Tools** — `xcode-select --install` (no full Xcode needed)
 
 ## Build & install (from source)
