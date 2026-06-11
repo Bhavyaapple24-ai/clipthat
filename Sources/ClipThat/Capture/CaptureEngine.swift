@@ -21,8 +21,8 @@ final class CaptureEngine: NSObject, SCStreamOutput, SCStreamDelegate {
     private var firstFrameTime: CMTime?
     private var lastFrameTime: CMTime?
 
-    private let videoQueue = DispatchQueue(label: "com.afterclip.capture.video")
-    private let audioQueue = DispatchQueue(label: "com.afterclip.capture.audio")
+    private let videoQueue = DispatchQueue(label: "com.clipthat.capture.video")
+    private let audioQueue = DispatchQueue(label: "com.clipthat.capture.audio")
 
     // MARK: - Content enumeration
 
@@ -54,7 +54,9 @@ final class CaptureEngine: NSObject, SCStreamOutput, SCStreamDelegate {
     // MARK: - Smoke-test capture
 
     /// Captures the main display for `seconds` seconds, then prints measured stats.
-    func runCaptureTest(seconds: Double) async throws {
+    /// `fps` is a ceiling (the display's refresh rate is the real limit); `nativeResolution`
+    /// captures at the panel's true pixel size instead of points.
+    func runCaptureTest(seconds: Double, fps: Int = 60, nativeResolution: Bool = false) async throws {
         let content = try await SCShareableContent.excludingDesktopWindows(
             false, onScreenWindowsOnly: true)
 
@@ -67,9 +69,15 @@ final class CaptureEngine: NSObject, SCStreamOutput, SCStreamDelegate {
         let filter = SCContentFilter(display: display, excludingWindows: [])
 
         let config = SCStreamConfiguration()
-        config.width = display.width
-        config.height = display.height
-        config.minimumFrameInterval = CMTime(value: 1, timescale: 60) // aim for 60fps
+        var captureW = display.width, captureH = display.height
+        if nativeResolution, let mode = CGDisplayCopyDisplayMode(display.displayID),
+           mode.pixelWidth > 0, mode.pixelHeight > 0 {
+            captureW = mode.pixelWidth
+            captureH = mode.pixelHeight
+        }
+        config.width = captureW
+        config.height = captureH
+        config.minimumFrameInterval = CMTime(value: 1, timescale: CMTimeScale(fps))
         config.pixelFormat = kCVPixelFormatType_32BGRA
         config.showsCursor = true
         // System audio capture (all apps mixed). Per-app audio comes in a later increment.
@@ -82,7 +90,7 @@ final class CaptureEngine: NSObject, SCStreamOutput, SCStreamDelegate {
         try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: audioQueue)
         self.stream = stream
 
-        print("Starting \(Int(seconds))s capture of display \(display.width)x\(display.height)…")
+        print("Starting \(Int(seconds))s capture of \(captureW)x\(captureH) @ up to \(fps)fps…")
         try await stream.startCapture()
 
         try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))

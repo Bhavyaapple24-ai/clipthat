@@ -7,7 +7,7 @@
 # permission once and never again. Runs once; it's a no-op if the identity already exists.
 set -euo pipefail
 
-IDENTITY="Afterclip Dev"
+IDENTITY="ClipThat Dev"
 KEYCHAIN="$HOME/Library/Keychains/login.keychain-db"
 
 # Note: no -v — the cert is self-signed/untrusted, so it won't show as "valid", but it's
@@ -27,7 +27,7 @@ distinguished_name = dn
 x509_extensions    = v3
 prompt             = no
 [dn]
-CN = Afterclip Dev
+CN = ClipThat Dev
 [v3]
 basicConstraints   = critical,CA:false
 keyUsage           = critical,digitalSignature
@@ -38,10 +38,10 @@ openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
     -keyout "$TMP/key.pem" -out "$TMP/cert.pem" -config "$TMP/cfg.cnf" 2>/dev/null
 
 openssl pkcs12 -export -inkey "$TMP/key.pem" -in "$TMP/cert.pem" \
-    -name "$IDENTITY" -out "$TMP/id.p12" -passout pass:afterclip 2>/dev/null
+    -name "$IDENTITY" -out "$TMP/id.p12" -passout pass:clipthat 2>/dev/null
 
 # Import key+cert and pre-authorize codesign to use the key (avoids repeated prompts).
-security import "$TMP/id.p12" -k "$KEYCHAIN" -P afterclip -T /usr/bin/codesign
+security import "$TMP/id.p12" -k "$KEYCHAIN" -P clipthat -T /usr/bin/codesign
 
 echo ""
 echo "✓ Created '$IDENTITY'."

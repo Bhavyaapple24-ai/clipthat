@@ -5,6 +5,8 @@ struct Settings: Codable {
     var bufferSeconds: Double = 30
     var bitrateMbps: Int = 25
     var autoUpload: Bool = false
+    var fps: Int = 60
+    var nativeResolution: Bool = false
 
     /// Selectable replay-buffer lengths (seconds). Longer = more RAM (encoded video is kept
     /// in memory): roughly bitrateMbps/8 MB per second, e.g. 25 Mbps × 120s ≈ 375 MB.
@@ -14,9 +16,26 @@ struct Settings: Codable {
     static let qualityPresets: [(name: String, mbps: Int)] =
         [("Low", 8), ("Medium", 15), ("High", 25), ("Ultra", 40)]
 
+    /// Capture frame-rate ceiling. ScreenCaptureKit never delivers faster than the display
+    /// refreshes, so 120 only takes effect on ProMotion / high-refresh displays.
+    static let fpsOptions: [Int] = [60, 120]
+
+    init() {}
+
+    // Decode field-by-field with defaults so a settings.json written by an older build
+    // (missing newer keys) doesn't fail wholesale and silently reset every setting.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        bufferSeconds = (try? c.decode(Double.self, forKey: .bufferSeconds)) ?? 30
+        bitrateMbps = (try? c.decode(Int.self, forKey: .bitrateMbps)) ?? 25
+        autoUpload = (try? c.decode(Bool.self, forKey: .autoUpload)) ?? false
+        fps = (try? c.decode(Int.self, forKey: .fps)) ?? 60
+        nativeResolution = (try? c.decode(Bool.self, forKey: .nativeResolution)) ?? false
+    }
+
     static let fileURL: URL = FileManager.default
         .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        .appendingPathComponent("Afterclip", isDirectory: true)
+        .appendingPathComponent("ClipThat", isDirectory: true)
         .appendingPathComponent("settings.json")
 
     static func load() -> Settings {

@@ -17,7 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var settings = Settings.load()
     private lazy var clipsDir: URL = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent("Movies/Afterclip")
+        .appendingPathComponent("Movies/ClipThat")
 
     private lazy var statusMenuItem = NSMenuItem(title: "Starting…", action: nil, keyEquivalent: "")
     private var saveMenuItem: NSMenuItem?
@@ -27,7 +27,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
 
         buffer = ReplayBuffer(bufferSeconds: settings.bufferSeconds, outputDir: clipsDir,
-                              bitrateMbps: settings.bitrateMbps)
+                              bitrateMbps: settings.bitrateMbps,
+                              fps: settings.fps, nativeResolution: settings.nativeResolution)
         buffer.onStatusChange = { [weak self] running in
             DispatchQueue.main.async { self?.updateStatus(running: running) }
         }
@@ -51,7 +52,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
             button.image = NSImage(systemSymbolName: "record.circle",
-                                   accessibilityDescription: "Afterclip")
+                                   accessibilityDescription: "ClipThat")
             button.image?.isTemplate = true
         }
 
@@ -109,13 +110,47 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         qualityItem.submenu = qualityMenu
         menu.addItem(qualityItem)
 
+        // Frame Rate submenu. 120 only materializes on ProMotion / high-refresh displays
+        // (the capture fps is a ceiling), so hint when no connected screen can do it.
+        let hasHighRefresh = NSScreen.screens.contains { $0.maximumFramesPerSecond > 60 }
+        let fpsMenu = NSMenu()
+        for fps in Settings.fpsOptions {
+            var title = "\(fps) fps"
+            if fps > 60 { title += hasHighRefresh ? " (ProMotion)" : " (needs a 120 Hz display)" }
+            let item = NSMenuItem(title: title, action: #selector(setFPS(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = fps
+            item.state = (fps == settings.fps) ? .on : .off
+            fpsMenu.addItem(item)
+        }
+        let fpsItem = NSMenuItem(title: "Frame Rate", action: nil, keyEquivalent: "")
+        fpsItem.submenu = fpsMenu
+        menu.addItem(fpsItem)
+
+        // Resolution submenu: capture in display points (1080p-class on Retina) or at the
+        // panel's true pixel resolution (4K on a 4K display).
+        let resMenu = NSMenu()
+        let resOptions: [(name: String, native: Bool)] =
+            [("Standard (1080p-class)", false), ("Native Retina / 4K", true)]
+        for option in resOptions {
+            let item = NSMenuItem(title: option.name,
+                                  action: #selector(setResolution(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = option.native
+            item.state = (option.native == settings.nativeResolution) ? .on : .off
+            resMenu.addItem(item)
+        }
+        let resItem = NSMenuItem(title: "Resolution", action: nil, keyEquivalent: "")
+        resItem.submenu = resMenu
+        menu.addItem(resItem)
+
         let openFolder = NSMenuItem(title: "Open Clips Folder",
                                     action: #selector(openClipsFolder), keyEquivalent: "o")
         openFolder.target = self
         menu.addItem(openFolder)
 
         menu.addItem(.separator())
-        let quit = NSMenuItem(title: "Quit Afterclip", action: #selector(quit), keyEquivalent: "q")
+        let quit = NSMenuItem(title: "Quit ClipThat", action: #selector(quit), keyEquivalent: "q")
         quit.target = self
         menu.addItem(quit)
 
@@ -142,6 +177,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         for item in sender.menu?.items ?? [] { item.state = (item == sender) ? .on : .off }
     }
 
+    @objc private func setFPS(_ sender: NSMenuItem) {
+        guard let fps = sender.representedObject as? Int else { return }
+        settings.fps = fps
+        settings.save()
+        for item in sender.menu?.items ?? [] { item.state = (item == sender) ? .on : .off }
+        applyCaptureSettings()
+    }
+
+    @objc private func setResolution(_ sender: NSMenuItem) {
+        guard let native = sender.representedObject as? Bool else { return }
+        settings.nativeResolution = native
+        settings.save()
+        for item in sender.menu?.items ?? [] { item.state = (item == sender) ? .on : .off }
+        applyCaptureSettings()
+    }
+
+    /// fps / resolution changes rebuild the capture, which empties the replay ring — the
+    /// status item briefly shows "Reconnecting…" and buffering starts over from zero.
+    private func applyCaptureSettings() {
+        let fps = settings.fps, native = settings.nativeResolution
+        Task { await buffer.applyCaptureSettings(fps: fps, nativeResolution: native) }
+    }
+
     private func updateStatus(running: Bool) {
         isCapturing = running
         statusMenuItem.title = running
@@ -149,7 +207,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             : "⏸ Reconnecting…"
         if let button = statusItem.button {
             button.image = NSImage(systemSymbolName: running ? "record.circle.fill" : "record.circle",
-                                   accessibilityDescription: "Afterclip")
+                                   accessibilityDescription: "ClipThat")
             button.image?.isTemplate = true
         }
     }
@@ -181,7 +239,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     if self.settings.autoUpload { self.upload(url) }
                 } else {
                     self.notify(title: "Couldn’t save clip",
-                                body: "Buffer may still be filling. See afterclip.log for details.")
+                                body: "Buffer may still be filling. See clipthat.log for details.")
                 }
             }
         }
@@ -277,13 +335,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func showCaptureError(_ error: Error) {
         statusMenuItem.title = "⚠️ Capture unavailable"
         let alert = NSAlert()
-        alert.messageText = "Afterclip can't record the screen"
+        alert.messageText = "ClipThat can't record the screen"
         alert.informativeText = """
         \(error.localizedDescription)
 
         Grant permission in:
         System Settings ▸ Privacy & Security ▸ Screen & System Audio Recording
-        Enable “Afterclip”, then quit and reopen the app.
+        Enable “ClipThat”, then quit and reopen the app.
         """
         alert.addButton(withTitle: "Open Settings")
         alert.addButton(withTitle: "Later")

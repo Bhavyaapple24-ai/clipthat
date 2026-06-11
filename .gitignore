@@ -1,7 +1,11 @@
 # Build artifacts
 .build/
 *.app/
+*.zip
 DerivedData/
+
+# Local tooling (standalone gh binary, etc.)
+.tooling/
 
 # Generated icon (created from icon.png at build time)
 **/AppIcon.icns
@@ -12,6 +16,8 @@ DerivedData/
 # Local logs / clips (these live in ~/Movies and ~/Library, but ignore if any land here)
 *.log
 *.mp4
+# …except the website demo clip, which must ship with the site.
+!docs/demo.mp4
 
 # Claude Code local settings
 .claude/

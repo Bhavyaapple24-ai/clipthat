@@ -26,7 +26,7 @@ final class Recorder: NSObject, SCStreamOutput, SCStreamDelegate {
 
     private let bitrate: Int
     private let outputURL: URL
-    private let captureQueue = DispatchQueue(label: "com.afterclip.recorder")
+    private let captureQueue = DispatchQueue(label: "com.clipthat.recorder")
 
     init(outputURL: URL, bitrateMbps: Int = 25) {
         self.outputURL = outputURL
@@ -39,7 +39,7 @@ final class Recorder: NSObject, SCStreamOutput, SCStreamDelegate {
         let content = try await SCShareableContent.excludingDesktopWindows(
             false, onScreenWindowsOnly: true)
         guard let display = content.displays.first else {
-            throw NSError(domain: "Afterclip", code: 1,
+            throw NSError(domain: "ClipThat", code: 1,
                           userInfo: [NSLocalizedDescriptionKey: "No display to capture."])
         }
 

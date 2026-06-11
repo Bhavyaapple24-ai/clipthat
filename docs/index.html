@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<!--
+  ClipThat landing page.
+
+  BEFORE DEPLOYING, replace these placeholders (find & replace across this file):
+    Bhavyaapple24-ai         -> your GitHub username (used for repo + Homebrew tap URLs)
+  Optional assets to drop into this docs/ folder:
+    icon.png   (1024x1024 app icon)  -> shown in the hero instead of the CSS record-dot mark
+    demo.mp4   (short screen recording) -> shown in the demo frame instead of the placeholder
+
+  Deploy free: push to GitHub, then Settings -> Pages -> Deploy from branch -> main -> /docs.
+  Your site goes live at https://Bhavyaapple24-ai.github.io/clipthat
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ClipThat — instant replay for macOS</title>
+<meta name="description" content="Free, open-source instant-replay game clipper for macOS. Press a hotkey to save the last 30 seconds — with full game audio. Like Medal or ShadowPlay, but Mac-native." />
+<meta property="og:title" content="ClipThat — save the play after it happened" />
+<meta property="og:description" content="Always-on instant replay for macOS. Free & open source. 120fps, 4K, full game audio, one-key Discord sharing." />
+<meta property="og:type" content="website" />
+<style>
+  :root {
+    --bg: #0a0b0e;
+    --surface: #14161c;
+    --surface-2: #1b1e26;
+    --border: #262a34;
+    --text: #e9ebf0;
+    --muted: #9298a6;
+    --faint: #6b7280;
+    --accent: #ff4242;
+    --accent-soft: rgba(255, 66, 66, 0.12);
+    --radius: 14px;
+    --maxw: 960px;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: inherit; text-decoration: none; }
+  .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
+
+  /* Header */
+  header { border-bottom: 1px solid var(--border); position: sticky; top: 0; background: rgba(10,11,14,0.8); backdrop-filter: blur(10px); z-index: 10; }
+  .nav { display: flex; align-items: center; justify-content: space-between; height: 60px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 17px; letter-spacing: -0.01em; }
+  .dot { width: 13px; height: 13px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); flex: none; }
+  .nav-links { display: flex; align-items: center; gap: 22px; font-size: 14px; color: var(--muted); }
+  .nav-links a:hover { color: var(--text); }
+
+  /* Buttons */
+  .btn { display: inline-flex; align-items: center; gap: 9px; padding: 12px 22px; border-radius: 10px; font-size: 15px; font-weight: 500; border: 1px solid var(--border); background: var(--surface); transition: transform .06s ease, background .15s ease, border-color .15s ease; cursor: pointer; }
+  .btn:hover { background: var(--surface-2); border-color: #343948; }
+  .btn:active { transform: scale(0.98); }
+  .btn svg { width: 18px; height: 18px; }
+  .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn-primary:hover { background: #ff5a5a; border-color: #ff5a5a; }
+
+  /* Hero */
+  .hero { text-align: center; padding: 96px 0 72px; }
+  .hero .pill { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); background: var(--surface); border: 1px solid var(--border); padding: 6px 14px; border-radius: 999px; margin-bottom: 28px; }
+  .hero h1 { font-size: 56px; line-height: 1.05; letter-spacing: -0.03em; font-weight: 650; margin: 0 0 20px; }
+  .hero h1 .em { color: var(--accent); }
+  .hero p.sub { font-size: 20px; color: var(--muted); max-width: 580px; margin: 0 auto 14px; line-height: 1.5; }
+  .hero p.meta { font-size: 14px; color: var(--faint); margin: 0 0 34px; }
+  .cta-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
+  /* Demo frame */
+  .demo { margin: 8px auto 0; max-width: 760px; }
+  .frame { position: relative; aspect-ratio: 16 / 9; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; display: flex; align-items: center; justify-content: center; }
+  .frame video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .orb-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none; opacity: 0; transition: opacity .55s ease; }
+  .frame.live .orb-canvas { opacity: 1; }
+  .orb-poster { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle at 50% 62%, #16181f, #0c0d11 70%); transition: opacity .55s ease; }
+  .frame.live .orb-poster { opacity: 0; }
+  .orb-poster .pdot { width: 54px; height: 54px; border-radius: 50%; background: radial-gradient(circle at 38% 34%, #ff6a6a, #ff4242 55%, #b81f1f); box-shadow: 0 0 0 14px rgba(255,66,66,0.06), 0 0 55px 12px rgba(255,66,66,0.30); }
+  .orb-chip { position: absolute; left: 16px; bottom: 14px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: var(--muted); background: rgba(20,22,28,0.7); border: 1px solid var(--border); border-radius: 8px; padding: 5px 10px; display: inline-flex; align-items: center; gap: 7px; backdrop-filter: blur(4px); }
+  .orb-chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex: none; }
+
+  /* Sections */
+  section { padding: 64px 0; }
+  .section-head { text-align: center; margin-bottom: 44px; }
+  .section-head h2 { font-size: 34px; letter-spacing: -0.02em; font-weight: 600; margin: 0 0 10px; }
+  .section-head p { color: var(--muted); font-size: 17px; margin: 0; }
+
+  /* Features */
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 26px 24px; }
+  .card .ic { width: 42px; height: 42px; border-radius: 11px; background: var(--accent-soft); display: flex; align-items: center; justify-content: center; margin-bottom: 16px; }
+  .card .ic svg { width: 22px; height: 22px; color: var(--accent); }
+  .card h3 { font-size: 17px; font-weight: 600; margin: 0 0 6px; }
+  .card p { font-size: 14.5px; color: var(--muted); margin: 0; line-height: 1.55; }
+
+  /* Steps */
+  .steps { max-width: 680px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
+  .step { display: flex; gap: 18px; align-items: flex-start; }
+  .step .n { flex: none; width: 36px; height: 36px; border-radius: 50%; background: var(--surface); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 15px; color: var(--accent); }
+  .step .body { padding-top: 5px; }
+  .step .body strong { font-weight: 600; }
+  kbd { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; background: var(--surface-2); border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 6px; padding: 2px 7px; color: var(--text); }
+
+  /* Install */
+  .install { max-width: 680px; margin: 0 auto; }
+  .codeblock { position: relative; background: #0e1014; border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 22px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px; line-height: 1.9; color: #cdd2dc; overflow-x: auto; }
+  .codeblock .c { color: var(--faint); }
+  .copy { position: absolute; top: 12px; right: 12px; background: var(--surface); border: 1px solid var(--border); color: var(--muted); border-radius: 8px; padding: 6px 11px; font-size: 12.5px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+  .copy:hover { color: var(--text); border-color: #343948; }
+  .copy svg { width: 14px; height: 14px; }
+  .note { font-size: 14px; color: var(--muted); margin-top: 18px; }
+  .note a { color: var(--accent); }
+
+  /* FAQ */
+  .faq { max-width: 680px; margin: 0 auto; }
+  .qa { border-top: 1px solid var(--border); padding: 22px 0; }
+  .qa:last-child { border-bottom: 1px solid var(--border); }
+  .qa h3 { font-size: 16.5px; font-weight: 600; margin: 0 0 8px; }
+  .qa p { color: var(--muted); font-size: 14.5px; margin: 0; line-height: 1.6; }
+
+  /* Footer */
+  footer { border-top: 1px solid var(--border); padding: 40px 0; text-align: center; color: var(--faint); font-size: 13.5px; }
+  footer .flinks { display: flex; gap: 20px; justify-content: center; margin-bottom: 16px; }
+  footer .flinks a { color: var(--muted); }
+  footer .flinks a:hover { color: var(--text); }
+
+  @media (max-width: 760px) {
+    .hero { padding: 64px 0 52px; }
+    .hero h1 { font-size: 38px; }
+    .hero p.sub { font-size: 17px; }
+    .grid { grid-template-columns: 1fr; }
+    .section-head h2 { font-size: 27px; }
+    .nav-links a:not(.gh) { display: none; }
+  }
+</style>
+</head>
+<body>
+<p class="sr-only">ClipThat is a free, open-source instant-replay game clipper for macOS that saves the last few seconds of gameplay with audio when you press a hotkey.</p>
+
+<header>
+  <div class="wrap nav">
+    <a class="brand" href="#top"><span class="dot" aria-hidden="true"></span>ClipThat</a>
+    <nav class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#how">How it works</a>
+      <a href="#install">Install</a>
+      <a class="gh" href="https://github.com/Bhavyaapple24-ai/clipthat">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<a id="top"></a>
+<main class="wrap">
+
+  <section class="hero">
+    <span class="pill"><span class="dot" style="width:8px;height:8px;box-shadow:none;" aria-hidden="true"></span>Free &amp; open source</span>
+    <h1>Save the play <span class="em">after</span> it happened.</h1>
+    <p class="sub">Always-on instant replay for macOS. Press a hotkey, keep the last 30 seconds — with full game audio. Like Medal or ShadowPlay, but Mac-native.</p>
+    <p class="meta">macOS 14.2+ · Apple Silicon · no account, no telemetry</p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="#install">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14"/></svg>
+        Install free
+      </a>
+      <a class="btn" href="https://github.com/Bhavyaapple24-ai/clipthat">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.26c0 4.5 2.87 8.32 6.84 9.67.5.1.68-.22.68-.49 0-.24-.01-.88-.01-1.73-2.78.62-3.37-1.37-3.37-1.37-.46-1.18-1.11-1.49-1.11-1.49-.91-.64.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.37-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.27 2.75 1.05a9.4 9.4 0 015 0c1.91-1.32 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.81-4.57 5.06.36.32.68.94.68 1.9 0 1.37-.01 2.48-.01 2.82 0 .27.18.6.69.49A10.02 10.02 0 0022 12.26C22 6.58 17.52 2 12 2z"/></svg>
+        View on GitHub
+      </a>
+    </div>
+
+    <div class="demo">
+      <div class="frame" id="orbFrame">
+        <div class="orb-poster" id="orbPoster"><div class="pdot" aria-hidden="true"></div></div>
+        <canvas class="orb-canvas" id="orbCanvas" aria-hidden="true"></canvas>
+        <div class="orb-chip">buffering — last 0:<span id="orbTick">30</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="features">
+    <div class="section-head">
+      <h2>Everything ShadowPlay does. On a Mac.</h2>
+      <p>Built on ScreenCaptureKit and VideoToolbox — native, fast, no FPS hit.</p>
+    </div>
+    <div class="grid">
+      <div class="card">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 109-9 9 9 0 00-9 9z"/><path d="M3 12H1m2 0l3-3m-3 3l3 3"/><path d="M12 8v4l3 2"/></svg></div>
+        <h3>Always-on buffer</h3>
+        <p>A rolling 15s–5 min replay runs in the background, ready the moment you need it.</p>
+      </div>
+      <div class="card">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3"/></svg></div>
+        <h3>Hardware encoded</h3>
+        <p>H.264 via VideoToolbox on Apple Silicon. Your frame rate stays where it belongs.</p>
+      </div>
+      <div class="card">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 010 7M19 5a9 9 0 010 14"/></svg></div>
+        <h3>Full game audio</h3>
+        <p>System audio captured and synced, muxed straight into every clip.</p>
+      </div>
+      <div class="card">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L4 14h7l-2 8 9-12h-7l2-8z"/></svg></div>
+        <h3>120fps &amp; 4K</h3>
+        <p>ProMotion-aware high-refresh capture and native-resolution recording.</p>
+      </div>
+      <div class="card">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg></div>
+        <h3>Global hotkeys</h3>
+        <p>Save and share work even inside fullscreen games. Never alt-tab to clip again.</p>
+      </div>
+      <div class="card">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg></div>
+        <h3>Share to Discord</h3>
+        <p>One key uploads the clip and copies an inline-playable link. No "file too big," no Nitro.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="how">
+    <div class="section-head">
+      <h2>How it works</h2>
+      <p>Three keys. That's the whole app.</p>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <div class="n">1</div>
+        <div class="body">It's <strong>always recording</strong> in the background — a rolling buffer of your last few seconds, kept in memory.</div>
+      </div>
+      <div class="step">
+        <div class="n">2</div>
+        <div class="body">Made a play? Hit <kbd>⌥⌘C</kbd> to save the last 30 seconds, numbered cleanly as <kbd>CLIP NO. 1.mp4</kbd>.</div>
+      </div>
+      <div class="step">
+        <div class="n">3</div>
+        <div class="body">Hit <kbd>⌥⌘S</kbd> to upload it and copy a <strong>Discord-playable link</strong> straight to your clipboard.</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="install">
+    <div class="section-head">
+      <h2>Install in one command</h2>
+      <p>The tap clears the macOS quarantine flag for you, so it just opens.</p>
+    </div>
+    <div class="install">
+      <div class="codeblock">
+        <button class="copy" type="button" aria-label="Copy install commands">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+          <span class="copy-label">Copy</span>
+        </button>
+<span class="c"># add the tap, then install</span>
+brew tap Bhavyaapple24-ai/clipthat
+brew install --cask clipthat</div>
+      <p class="note">On first launch, macOS asks for <strong>Screen &amp; System Audio Recording</strong> permission — grant it to “ClipThat,” then reopen. Prefer to build it yourself? Clone the repo and run <a href="https://github.com/Bhavyaapple24-ai/clipthat">./scripts/bundle.sh</a>.</p>
+    </div>
+  </section>
+
+  <section id="faq">
+    <div class="section-head">
+      <h2>Questions</h2>
+    </div>
+    <div class="faq">
+      <div class="qa">
+        <h3>Is it actually free?</h3>
+        <p>Yes — free and open source under the MIT license. No account, no trial, no telemetry. You can read every line of the source on GitHub.</p>
+      </div>
+      <div class="qa">
+        <h3>Why does it need screen recording permission?</h3>
+        <p>That's how it captures your gameplay — the same permission OBS or any screen recorder uses. Audio capture rides on the same grant. Nothing leaves your Mac unless you press the share key.</p>
+      </div>
+      <div class="qa">
+        <h3>Will it slow down my game?</h3>
+        <p>No. Encoding runs on the dedicated hardware encoder, and only the compressed video is kept in memory, so there's no measurable FPS hit while playing.</p>
+      </div>
+      <div class="qa">
+        <h3>Does it work on Intel Macs?</h3>
+        <p>It's built and tested for Apple Silicon on macOS 14.2 and newer. Intel isn't officially supported.</p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="flinks">
+      <a href="https://github.com/Bhavyaapple24-ai/clipthat">GitHub</a>
+      <a href="https://github.com/Bhavyaapple24-ai/clipthat/blob/main/LICENSE">License</a>
+      <a href="https://github.com/Bhavyaapple24-ai/clipthat/issues">Report an issue</a>
+    </div>
+    <p style="margin:0;">MIT licensed · An independent project, not affiliated with Medal, NVIDIA, or Discord.</p>
+  </div>
+</footer>
+
+<script>
+  document.querySelector('.copy').addEventListener('click', function () {
+    var cmd = 'brew tap Bhavyaapple24-ai/clipthat\nbrew install --cask clipthat';
+    navigator.clipboard.writeText(cmd).then(function () {
+      var label = document.querySelector('.copy-label');
+      label.textContent = 'Copied';
+      setTimeout(function () { label.textContent = 'Copy'; }, 1600);
+    });
+  });
+</script>
+
+<script type="module">
+(async function () {
+  var frame = document.getElementById('orbFrame');
+  var canvas = document.getElementById('orbCanvas');
+  if (!frame || !canvas) return;
+
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var coarse = window.matchMedia('(pointer: coarse)').matches;
+
+  var THREE;
+  try { THREE = await import('https://esm.sh/three@0.160.0'); }
+  catch (e) { return; }                       // CDN unreachable -> poster stays
+
+  try {
+    var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+    renderer.setClearColor(0x000000, 0);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.15;
+
+    var scene = new THREE.Scene();
+    var camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
+    camera.position.set(0, 0, 4.5);
+
+    function resize() {
+      var w = frame.clientWidth, h = frame.clientHeight;
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, coarse ? 1.5 : 2));
+      renderer.setSize(w, h, false);
+      camera.aspect = w / h; camera.updateProjectionMatrix();
+    }
+
+    // Procedural env map (no image assets): dark with a faint red glow from below.
+    var gc = document.createElement('canvas'); gc.width = 16; gc.height = 256;
+    var gg = gc.getContext('2d');
+    var grd = gg.createLinearGradient(0, 0, 0, 256);
+    grd.addColorStop(0, '#0d0e12'); grd.addColorStop(0.55, '#08090c');
+    grd.addColorStop(0.86, '#2c0e11'); grd.addColorStop(1, '#5c1519');
+    gg.fillStyle = grd; gg.fillRect(0, 0, 16, 256);
+    var envSrc = new THREE.CanvasTexture(gc);
+    envSrc.mapping = THREE.EquirectangularReflectionMapping;
+    envSrc.colorSpace = THREE.SRGBColorSpace;
+    var pmrem = new THREE.PMREMGenerator(renderer);
+    scene.environment = pmrem.fromEquirectangular(envSrc).texture;
+    envSrc.dispose(); pmrem.dispose();
+
+    scene.add(new THREE.AmbientLight(0x2a3446, 0.5));
+    var key = new THREE.DirectionalLight(0xff6a6a, 1.0); key.position.set(-2.4, 1.6, 3); scene.add(key);
+    var rim = new THREE.DirectionalLight(0x3a5f86, 0.6); rim.position.set(2.2, -1.2, -2); scene.add(rim);
+
+    var group = new THREE.Group();
+    group.rotation.x = 0.35; group.rotation.z = 0.12;
+    scene.add(group);
+
+    group.add(new THREE.Mesh(
+      new THREE.SphereGeometry(1, 64, 64),
+      new THREE.MeshStandardMaterial({ color: 0x0a0b0e, metalness: 0.72, roughness: 0.22 })
+    ));
+
+    // Light-spiral: a helix wound pole-to-pole around the sphere (the rolling buffer).
+    var pts = [], wraps = 6, R = 1.035;
+    for (var i = 0; i <= 420; i++) {
+      var t = i / 420, phi = t * Math.PI, ang = t * wraps * Math.PI * 2;
+      pts.push(new THREE.Vector3(
+        R * Math.sin(phi) * Math.cos(ang), R * Math.cos(phi), R * Math.sin(phi) * Math.sin(ang)));
+    }
+    var tube = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 600, 0.028, 8, false);
+
+    // Marching dashes with an alpha tail (the visible "last 30s").
+    var dc = document.createElement('canvas'); dc.width = 1024; dc.height = 8;
+    var dg = dc.getContext('2d'); var dashes = 72;
+    for (var d = 0; d < dashes; d++) {
+      var dx = (d / dashes) * 1024, a = 0.12 + 0.88 * (d / dashes);
+      dg.fillStyle = 'rgba(255,66,66,' + a.toFixed(3) + ')';
+      dg.fillRect(dx, 0, (1024 / dashes) * 0.55, 8);
+    }
+    var dashTex = new THREE.CanvasTexture(dc);
+    dashTex.wrapS = THREE.RepeatWrapping; dashTex.wrapT = THREE.ClampToEdgeWrapping;
+    var spiralMat = new THREE.MeshBasicMaterial({ map: dashTex, color: 0xff4242,
+      transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
+    group.add(new THREE.Mesh(tube, spiralMat));
+
+    // Record-dot at the front pole + additive halo (fake bloom, no post pass).
+    var dotMat = new THREE.MeshBasicMaterial({ color: 0xff4242 });
+    var dot = new THREE.Mesh(new THREE.SphereGeometry(0.11, 24, 24), dotMat);
+    dot.position.set(0, 1.0, 0); group.add(dot);
+
+    var hc = document.createElement('canvas'); hc.width = hc.height = 128;
+    var hg = hc.getContext('2d');
+    var hgr = hg.createRadialGradient(64, 64, 0, 64, 64, 64);
+    hgr.addColorStop(0, 'rgba(255,96,96,0.95)'); hgr.addColorStop(0.4, 'rgba(255,66,66,0.35)');
+    hgr.addColorStop(1, 'rgba(255,66,66,0)');
+    hg.fillStyle = hgr; hg.fillRect(0, 0, 128, 128);
+    var halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(hc),
+      blending: THREE.AdditiveBlending, transparent: true, depthWrite: false }));
+    halo.scale.setScalar(0.72); dot.add(halo);
+
+    resize(); window.addEventListener('resize', resize);
+    frame.classList.add('live');
+
+    // Desktop pointer-lean (inertial, capped).
+    var tgt = { x: 0, y: 0 };
+    if (!coarse && !reduce) window.addEventListener('pointermove', function (e) {
+      var r = frame.getBoundingClientRect();
+      tgt.x = ((e.clientX - (r.left + r.width / 2)) / r.width) * 0.55;
+      tgt.y = ((e.clientY - (r.top + r.height / 2)) / r.height) * 0.45;
+    });
+
+    // The rewind: the spiral runs backward, dot flashes white.
+    var rewind = 0;
+    frame.addEventListener('pointerup', function () { rewind = 640; });
+
+    var tickEl = document.getElementById('orbTick'), sec = 30;
+    if (tickEl && !reduce) setInterval(function () {
+      sec = sec > 0 ? sec - 1 : 30; tickEl.textContent = String(sec).padStart(2, '0');
+    }, 1000);
+
+    var running = true, looping = false, last = 0;
+    function render(dt) {
+      if (rewind > 0) { rewind -= dt; dashTex.offset.x -= 0.0016 * 9; dotMat.color.setHex(0xffffff); halo.scale.setScalar(0.96); }
+      else { dashTex.offset.x += 0.0016; dotMat.color.setHex(0xff4242); halo.scale.setScalar(0.72 + Math.sin(performance.now() * 0.005) * 0.06); }
+      dashTex.offset.x = (dashTex.offset.x % 1 + 1) % 1;
+      group.rotation.y += 0.00006 * dt;
+      group.rotation.x += (0.35 + tgt.y - group.rotation.x) * 0.05;
+      group.rotation.z += (0.12 + tgt.x - group.rotation.z) * 0.05;
+      renderer.render(scene, camera);
+    }
+    function loop(ts) {
+      if (!running) { looping = false; return; }
+      if (!last) last = ts; var dt = Math.min(ts - last, 50); last = ts;
+      render(dt); requestAnimationFrame(loop);
+    }
+    function start() { if (!looping && !reduce) { looping = true; last = 0; requestAnimationFrame(loop); } }
+
+    new IntersectionObserver(function (en) { running = en[0].isIntersecting; if (running) start(); },
+      { threshold: 0.05 }).observe(frame);
+
+    if (reduce) { render(16); }
+    else { start(); setInterval(function () { if (running) rewind = 640; }, 6000); }
+  } catch (e) {
+    frame.classList.remove('live');               // any WebGL failure -> poster stays
+  }
+})();
+</script>
+</body>
+</html>

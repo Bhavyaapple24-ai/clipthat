@@ -1,7 +1,7 @@
-# Afterclip
+# ClipThat
 
 **A free, open-source instant-replay game clipper for macOS** — like Medal / NVIDIA ShadowPlay,
-but Mac-native. Afterclip keeps an always-on rolling buffer of your screen in the background;
+but Mac-native. ClipThat keeps an always-on rolling buffer of your screen in the background;
 press a hotkey to save *the last 30 seconds* (the play you already made), with full game audio.
 Then one more hotkey uploads it and copies a **link that plays inline in Discord** — no "file too
 big, need Nitro."
@@ -12,9 +12,12 @@ big, need Nitro."
 
 - 🔴 **Always-on instant-replay buffer** — adjustable 15s / 30s / 1 min / 2 min / 5 min
 - 🎮 **Hardware-encoded H.264 video** (VideoToolbox) — no FPS hit while gaming
+- 🏎️ **Up to 120 fps capture** on ProMotion / high-refresh displays
+- 🖥️ **Native Retina / 4K resolution** option (or lighter 1080p-class standard mode)
 - 🔊 **Full-length, synced game audio** captured via ScreenCaptureKit
 - ⌨️ **Global hotkeys** that work even in fullscreen games
 - 🎚️ **Quality presets** (Low → Ultra) — applied live
+- 🔢 **Numbered clips** — saved as `CLIP NO. 1.mp4`, `CLIP NO. 2.mp4`, …
 - 🔗 **Share to Discord** — uploads the clip and copies an inline-playable link
 - ⚙️ **Persistent settings**, lightweight menu-bar app (no Dock clutter)
 
@@ -25,8 +28,9 @@ big, need Nitro."
 | **⌥⌘C** | Save the last N seconds (the replay buffer) |
 | **⌥⌘S** | Upload the last clip & copy a Discord-playable link |
 
-Everything else lives in the **◉ menu-bar icon**: buffer length, quality, auto-upload toggle,
-and *Open Clips Folder*.
+Everything else lives in the **◉ menu-bar icon**: buffer length, quality, frame rate,
+resolution, auto-upload toggle, and *Open Clips Folder*. Changing frame rate or resolution
+rebuilds the capture, so the replay buffer starts refilling from zero.
 
 ## Requirements
 
@@ -36,17 +40,17 @@ and *Open Clips Folder*.
 ## Build & install (from source)
 
 ```sh
-git clone https://github.com/YOUR_USERNAME/afterclip.git
-cd afterclip
+git clone https://github.com/YOUR_USERNAME/clipthat.git
+cd clipthat
 
 ./scripts/setup-signing.sh   # once: creates a stable local signature so the macOS
                              # Screen-Recording permission sticks across rebuilds
-./scripts/bundle.sh          # builds & signs "Afterclip.app"
-open "Afterclip.app"
+./scripts/bundle.sh          # builds & signs "ClipThat.app"
+open "ClipThat.app"
 ```
 
 On first launch, macOS asks for **Screen & System Audio Recording** permission (shown as
-"Afterclip"). Grant it in **System Settings ▸ Privacy & Security ▸ Screen & System Audio
+"ClipThat"). Grant it in **System Settings ▸ Privacy & Security ▸ Screen & System Audio
 Recording**, then quit and reopen the app. Look for the ◉ icon in your menu bar.
 
 > Building from source avoids Gatekeeper warnings — locally built apps aren't quarantined.
@@ -60,13 +64,13 @@ Drop a square PNG (ideally 1024×1024) at the repo root named `icon.png`, then r
 
 | What | Path |
 |---|---|
-| Saved clips | `~/Movies/Afterclip` |
-| Settings | `~/Library/Application Support/Afterclip/settings.json` |
-| Debug log | `~/Movies/Afterclip/afterclip.log` |
+| Saved clips | `~/Movies/ClipThat` |
+| Settings | `~/Library/Application Support/ClipThat/settings.json` |
+| Debug log | `~/Movies/ClipThat/clipthat.log` |
 
 ## How sharing works
 
-Afterclip uploads your clip to [catbox.moe](https://catbox.moe) (free, no account) and copies the
+ClipThat uploads your clip to [catbox.moe](https://catbox.moe) (free, no account) and copies the
 resulting direct `.mp4` link to your clipboard. Discord embeds that link and plays it inline, which
 sidesteps the attachment size limit. Notes:
 
@@ -89,4 +93,4 @@ MIT — see [LICENSE](LICENSE).
 
 ---
 
-*Afterclip is an independent project and is not affiliated with Medal, NVIDIA, or Discord.*
+*ClipThat is an independent project and is not affiliated with Medal, NVIDIA, or Discord.*

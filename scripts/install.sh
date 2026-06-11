@@ -9,14 +9,14 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 "$ROOT/scripts/bundle.sh"
 
 echo "▸ Clearing any stale Screen Recording permission for the app…"
-tccutil reset ScreenCapture com.afterclip.app >/dev/null 2>&1 || true
+tccutil reset ScreenCapture com.clipthat.app >/dev/null 2>&1 || true
 
 echo "▸ Quitting any running copy…"
-pkill -f "Afterclip.app" >/dev/null 2>&1 || true
+pkill -f "ClipThat.app" >/dev/null 2>&1 || true
 sleep 1
 
-echo "▸ Launching Afterclip…"
-open "$ROOT/Afterclip.app"
+echo "▸ Launching ClipThat…"
+open "$ROOT/ClipThat.app"
 
 cat <<'EOF'
 
@@ -24,8 +24,8 @@ cat <<'EOF'
 LAST STEP (one time only):
   1. A prompt asks to allow Screen & System Audio Recording → Allow / Open Settings.
   2. In Settings ▸ Privacy & Security ▸ Screen & System Audio Recording,
-     make sure "Afterclip" is ON.
-  3. Click the ◉ menu-bar icon ▸ Quit, then run:  open "Afterclip.app"
+     make sure "ClipThat" is ON.
+  3. Click the ◉ menu-bar icon ▸ Quit, then run:  open "ClipThat.app"
   4. From now on, rebuilds keep the same signature — no more permission nags.
 
 Then press ⌥⌘C while something is playing to save a 30-second clip.

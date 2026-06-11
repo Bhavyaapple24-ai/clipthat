@@ -15,9 +15,12 @@ import CoreMedia
 final class ReplayBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
 
     // Adjustable at runtime from the menu. `bufferSeconds` just changes the trim window;
-    // `bitrate` is pushed live into the encoder.
+    // `bitrate` is pushed live into the encoder. `fps` and `nativeResolution` require a
+    // stream + encoder rebuild (see `applyCaptureSettings`).
     var bufferSeconds: Double
     private var bitrate: Int
+    private var fps: Int
+    private var nativeResolution: Bool
     private let outputDir: URL
 
     private var stream: SCStream?
@@ -51,12 +54,15 @@ final class ReplayBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
     // Video and audio get SEPARATE queues. Video frames trigger heavy hardware-encode
     // submission; if audio shared that queue it would be starved and ScreenCaptureKit would
     // drop most audio buffers. The ring is protected by `lock`, so separate queues are safe.
-    private let videoQueue = DispatchQueue(label: "com.afterclip.replay.video")
-    private let audioQueue = DispatchQueue(label: "com.afterclip.replay.audio")
+    private let videoQueue = DispatchQueue(label: "com.clipthat.replay.video")
+    private let audioQueue = DispatchQueue(label: "com.clipthat.replay.audio")
 
-    init(bufferSeconds: Double, outputDir: URL, bitrateMbps: Int = 25) {
+    init(bufferSeconds: Double, outputDir: URL, bitrateMbps: Int = 25,
+         fps: Int = 60, nativeResolution: Bool = false) {
         self.bufferSeconds = bufferSeconds
         self.bitrate = bitrateMbps * 1_000_000
+        self.fps = max(1, fps)
+        self.nativeResolution = nativeResolution
         self.outputDir = outputDir
     }
 
@@ -66,21 +72,33 @@ final class ReplayBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
         let content = try await SCShareableContent.excludingDesktopWindows(
             false, onScreenWindowsOnly: true)
         guard let display = content.displays.first else {
-            throw NSError(domain: "Afterclip", code: 1,
+            throw NSError(domain: "ClipThat", code: 1,
                           userInfo: [NSLocalizedDescriptionKey: "No display to capture."])
         }
 
         let filter = SCContentFilter(display: display, excludingWindows: [])
         let config = SCStreamConfiguration()
-        config.width = display.width
-        config.height = display.height
-        config.minimumFrameInterval = CMTime(value: 1, timescale: 60)
+        // SCDisplay's width/height are in POINTS — capturing at that size on a Retina/4K
+        // panel produces a 1×, 1080p-class image. "Native" asks the current display mode
+        // for its true pixel dimensions instead (4K on a 4K display, 3024×1964 on a 14" MBP…).
+        var captureW = display.width, captureH = display.height
+        if nativeResolution, let mode = CGDisplayCopyDisplayMode(display.displayID),
+           mode.pixelWidth > 0, mode.pixelHeight > 0 {
+            captureW = mode.pixelWidth
+            captureH = mode.pixelHeight
+        }
+        config.width = captureW
+        config.height = captureH
+        // A ceiling, not a promise: SCK delivers at most the display's refresh rate, so 120
+        // only materializes on ProMotion / high-refresh panels.
+        config.minimumFrameInterval = CMTime(value: 1, timescale: CMTimeScale(fps))
         config.pixelFormat = kCVPixelFormatType_32BGRA
         config.showsCursor = true
-        config.queueDepth = 6
+        config.queueDepth = fps > 60 ? 8 : 6
         config.capturesAudio = true
         config.sampleRate = 48_000
         config.channelCount = 2
+        Log.write("start: capture \(captureW)x\(captureH) @ up to \(fps)fps (native=\(nativeResolution))")
 
         try FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
 
@@ -111,6 +129,39 @@ final class ReplayBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
             VTSessionSetProperty(session, key: kVTCompressionPropertyKey_AverageBitRate,
                                  value: bitrate as CFNumber)
         }
+    }
+
+    /// Change frame rate and/or capture resolution. Both are baked into the stream config
+    /// and the encoder session, so the capture is rebuilt; the ring is cleared because
+    /// mixed-resolution samples can't be muxed into one passthrough clip.
+    func applyCaptureSettings(fps: Int, nativeResolution: Bool) async {
+        guard fps != self.fps || nativeResolution != self.nativeResolution else { return }
+        self.fps = max(1, fps)
+        self.nativeResolution = nativeResolution
+        guard stream != nil else { return }   // not running; next start() picks the values up
+        await stop()
+        resetRings()
+        do {
+            try await start()
+        } catch {
+            Log.write("❌ Restart with new capture settings failed: \(error.localizedDescription)")
+            onStatusChange?(false)
+        }
+    }
+
+    private func resetRings() {
+        videoLock.lock()
+        videoSamples.removeAll()
+        videoFormat = nil
+        videoLock.unlock()
+        audioLock.lock()
+        audioSamples.removeAll()
+        audioFormat = nil
+        audioLock.unlock()
+        pixelWidth = 0
+        pixelHeight = 0
+        sawFirstFrame = false
+        encodeErrLogged = false
     }
 
     func stop() async {
@@ -166,11 +217,14 @@ final class ReplayBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
 
         VTSessionSetProperty(session, key: kVTCompressionPropertyKey_RealTime, value: kCFBooleanTrue)
         VTSessionSetProperty(session, key: kVTCompressionPropertyKey_AllowFrameReordering, value: kCFBooleanFalse)
+        // AutoLevel lets VideoToolbox pick whatever H.264 level the resolution × fps needs
+        // (4K @ 120 lands above level 5.2; Apple Silicon's encoder handles it).
         VTSessionSetProperty(session, key: kVTCompressionPropertyKey_ProfileLevel, value: kVTProfileLevel_H264_High_AutoLevel)
         VTSessionSetProperty(session, key: kVTCompressionPropertyKey_AverageBitRate, value: bitrate as CFNumber)
+        VTSessionSetProperty(session, key: kVTCompressionPropertyKey_ExpectedFrameRate, value: fps as CFNumber)
         // Keyframe every ~1s so the replay window almost always begins very close to its
         // requested start. Lower = tighter clip start but slightly larger files.
-        VTSessionSetProperty(session, key: kVTCompressionPropertyKey_MaxKeyFrameInterval, value: 60 as CFNumber)
+        VTSessionSetProperty(session, key: kVTCompressionPropertyKey_MaxKeyFrameInterval, value: fps as CFNumber)
         VTSessionSetProperty(session, key: kVTCompressionPropertyKey_MaxKeyFrameIntervalDuration, value: 1 as CFNumber)
         VTCompressionSessionPrepareToEncodeFrames(session)
         self.compression = session
@@ -198,7 +252,7 @@ final class ReplayBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
             guard let session = compression else { return }
 
             let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
-            let dur = CMTime(value: 1, timescale: 60)
+            let dur = CMTime(value: 1, timescale: CMTimeScale(fps))
             let enc = VTCompressionSessionEncodeFrame(
                 session, imageBuffer: px, presentationTimeStamp: pts, duration: dur,
                 frameProperties: nil, infoFlagsOut: nil
@@ -303,6 +357,20 @@ final class ReplayBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
         if drop > 0 { audioSamples.removeFirst(drop) }
     }
 
+    /// Next number in the "CLIP NO. n.mp4" sequence: one past the highest number already in
+    /// the clips folder. Scanning the folder (rather than persisting a counter) survives
+    /// settings resets and lets numbering restart cleanly if the user empties the folder.
+    private func nextClipNumber() -> Int {
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: outputDir.path)) ?? []
+        let prefix = "CLIP NO. "
+        let highest = names.compactMap { name -> Int? in
+            guard name.uppercased().hasPrefix(prefix),
+                  name.lowercased().hasSuffix(".mp4") else { return nil }
+            return Int(name.dropFirst(prefix.count).dropLast(".mp4".count))
+        }.max() ?? 0
+        return highest + 1
+    }
+
     private func isKeyframe(_ s: CMSampleBuffer) -> Bool {
         guard let arr = CMSampleBufferGetSampleAttachmentsArray(s, createIfNecessary: false) as? [[CFString: Any]],
               let first = arr.first else { return true }
@@ -382,9 +450,7 @@ final class ReplayBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
         let startPTS = CMSampleBufferGetPresentationTimeStamp(clipVideo[0])
         let clipAudio = auds.filter { CMSampleBufferGetPresentationTimeStamp($0) >= startPTS }
 
-        let stamp = ISO8601DateFormatter().string(from: Date())
-            .replacingOccurrences(of: ":", with: "-")
-        let url = outputDir.appendingPathComponent("clip-\(stamp).mp4")
+        let url = outputDir.appendingPathComponent("CLIP NO. \(nextClipNumber()).mp4")
 
         Log.write("saveClip: window=\(String(format: "%.1f", CMTimeGetSeconds(now - startPTS)))s, video=\(clipVideo.count) frames, audio=\(clipAudio.count) bufs -> \(url.lastPathComponent)")
 
@@ -431,7 +497,7 @@ final class ReplayBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
                                         sourceFormatHint: hint)
         vInput.expectsMediaDataInRealTime = false
         guard writer.canAdd(vInput) else {
-            throw NSError(domain: "Afterclip", code: 3,
+            throw NSError(domain: "ClipThat", code: 3,
                 userInfo: [NSLocalizedDescriptionKey: "Writer rejected video input."])
         }
         writer.add(vInput)
@@ -449,7 +515,7 @@ final class ReplayBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
 
         Log.write("writeClip: first video sample isKeyframe=\(isKeyframe(video[0])), startWriting…")
         guard writer.startWriting() else {
-            throw writer.error ?? NSError(domain: "Afterclip", code: 4,
+            throw writer.error ?? NSError(domain: "ClipThat", code: 4,
                 userInfo: [NSLocalizedDescriptionKey: "startWriting() returned false."])
         }
         writer.startSession(atSourceTime: startPTS)
@@ -459,21 +525,21 @@ final class ReplayBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
         // sequentially deadlocks. Running both at once lets the writer interleave normally.
         if hasAudio {
             async let vOK = feed(input: vInput, samples: video, writer: writer,
-                                 on: DispatchQueue(label: "com.afterclip.writer.v"), label: "video")
+                                 on: DispatchQueue(label: "com.clipthat.writer.v"), label: "video")
             async let aOK = feed(input: aInput, samples: audio, writer: writer,
-                                 on: DispatchQueue(label: "com.afterclip.writer.a"), label: "audio")
+                                 on: DispatchQueue(label: "com.clipthat.writer.a"), label: "audio")
             let (v, a) = await (vOK, aOK)
             Log.write("writeClip: video ok=\(v) audio ok=\(a) status=\(writer.status.rawValue) err=\(writer.error?.localizedDescription ?? "nil")")
         } else {
             let v = await feed(input: vInput, samples: video, writer: writer,
-                               on: DispatchQueue(label: "com.afterclip.writer.v"), label: "video")
+                               on: DispatchQueue(label: "com.clipthat.writer.v"), label: "video")
             Log.write("writeClip: video-only ok=\(v) status=\(writer.status.rawValue) err=\(writer.error?.localizedDescription ?? "nil")")
         }
 
         await writer.finishWriting()
         Log.write("writeClip: finish status=\(writer.status.rawValue) error=\(writer.error?.localizedDescription ?? "nil")")
         if writer.status != .completed {
-            throw writer.error ?? NSError(domain: "Afterclip", code: 2,
+            throw writer.error ?? NSError(domain: "ClipThat", code: 2,
                 userInfo: [NSLocalizedDescriptionKey: "AVAssetWriter did not complete (status \(writer.status.rawValue))."])
         }
     }
