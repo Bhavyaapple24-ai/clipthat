@@ -14,6 +14,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var isSaving = false
     private var isUploading = false
     private var lastClipURL: URL?
+    private let gameDetector = GameDetector()
+    /// True while game-only mode has intentionally parked the buffer (no game running).
+    private var pausedForGame = false
 
     private var settings = Settings.load()
     private lazy var clipsDir: URL = FileManager.default.homeDirectoryForCurrentUser
@@ -43,7 +46,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.shareLastClip()
         }
 
-        Task { await startBuffer() }
+        // Auto-highlight: fires on the audio queue; wait a beat so the loud moment isn't
+        // at the very edge of the clip window, then save like a manual hotkey press.
+        buffer.highlightDetector.enabled = settings.autoHighlight
+        buffer.highlightDetector.onHighlight = { [weak self] in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                guard let self, self.settings.autoHighlight else { return }
+                self.notify(title: "🔥 Loud moment detected", body: "Auto-saving the clip…")
+                self.saveClip()
+            }
+        }
+
+        // Game-only mode: park the buffer until a game launches.
+        gameDetector.onGameStateChange = { [weak self] gameRunning in
+            guard let self, self.settings.gameOnlyMode else { return }
+            self.applyGameMode(gameRunning: gameRunning)
+        }
+        gameDetector.start()
+
+        if settings.gameOnlyMode && !gameDetector.isGameRunning {
+            pausedForGame = true
+            updateStatus(running: false)
+        } else {
+            Task { await startBuffer() }
+        }
     }
 
     // MARK: - Menu bar
@@ -74,11 +100,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         share.target = self
         menu.addItem(share)
 
+        let gif = NSMenuItem(title: "Export Last Clip as GIF",
+                             action: #selector(exportGifAction), keyEquivalent: "g")
+        gif.keyEquivalentModifierMask = [.command, .option]
+        gif.target = self
+        menu.addItem(gif)
+
+        let library = NSMenuItem(title: "Clip Library…",
+                                 action: #selector(openLibrary), keyEquivalent: "l")
+        library.keyEquivalentModifierMask = [.command, .option]
+        library.target = self
+        menu.addItem(library)
+
         let auto = NSMenuItem(title: "Auto-upload after saving",
                               action: #selector(toggleAutoUpload(_:)), keyEquivalent: "")
         auto.target = self
         auto.state = settings.autoUpload ? .on : .off
         menu.addItem(auto)
+
+        let hl = NSMenuItem(title: "Auto-clip loud moments",
+                            action: #selector(toggleAutoHighlight(_:)), keyEquivalent: "")
+        hl.target = self
+        hl.state = settings.autoHighlight ? .on : .off
+        menu.addItem(hl)
+
+        let gameOnly = NSMenuItem(title: "Record only while a game runs",
+                                  action: #selector(toggleGameOnly(_:)), keyEquivalent: "")
+        gameOnly.target = self
+        gameOnly.state = settings.gameOnlyMode ? .on : .off
+        menu.addItem(gameOnly)
+
+        let wm = NSMenuItem(title: "Watermark saved clips",
+                            action: #selector(toggleWatermark(_:)), keyEquivalent: "")
+        wm.target = self
+        wm.state = settings.watermarkEnabled ? .on : .off
+        menu.addItem(wm)
 
         menu.addItem(.separator())
 
@@ -204,7 +260,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         isCapturing = running
         statusMenuItem.title = running
             ? "🔴 Buffering last \(Settings.label(settings.bufferSeconds))"
-            : "⏸ Reconnecting…"
+            : (pausedForGame ? "⏸ Waiting for a game to launch…" : "⏸ Reconnecting…")
         if let button = statusItem.button {
             button.image = NSImage(systemSymbolName: running ? "record.circle.fill" : "record.circle",
                                    accessibilityDescription: "ClipThat")
@@ -230,6 +286,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         isSaving = true
         Task {
             let url = await buffer.saveClip()
+            // Optional watermark burn-in (re-encodes, takes a few seconds) before notifying.
+            if let url, settings.watermarkEnabled {
+                try? await Watermarker.apply(to: url, text: settings.watermarkText)
+            }
             await MainActor.run {
                 self.isSaving = false
                 if let url {
@@ -253,6 +313,72 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settings.autoUpload.toggle()
         settings.save()
         sender.state = settings.autoUpload ? .on : .off
+    }
+
+    @objc private func toggleAutoHighlight(_ sender: NSMenuItem) {
+        settings.autoHighlight.toggle()
+        settings.save()
+        sender.state = settings.autoHighlight ? .on : .off
+        buffer.highlightDetector.enabled = settings.autoHighlight
+    }
+
+    @objc private func toggleWatermark(_ sender: NSMenuItem) {
+        settings.watermarkEnabled.toggle()
+        settings.save()
+        sender.state = settings.watermarkEnabled ? .on : .off
+    }
+
+    @objc private func toggleGameOnly(_ sender: NSMenuItem) {
+        settings.gameOnlyMode.toggle()
+        settings.save()
+        sender.state = settings.gameOnlyMode ? .on : .off
+        if settings.gameOnlyMode {
+            applyGameMode(gameRunning: gameDetector.isGameRunning)
+        } else {
+            pausedForGame = false
+            if !isCapturing { Task { await startBuffer() } }
+        }
+    }
+
+    /// Start/stop the buffer as games come and go (only while game-only mode is on).
+    private func applyGameMode(gameRunning: Bool) {
+        if gameRunning {
+            pausedForGame = false
+            notify(title: "🎮 Game detected", body: "Replay buffer is on.")
+            if !isCapturing { Task { await startBuffer() } }
+        } else {
+            pausedForGame = true
+            Task { await buffer.stop() }   // stop() fires onStatusChange -> "Waiting for a game…"
+        }
+    }
+
+    @objc private func exportGifAction() {
+        guard let url = lastClipURL ?? mostRecentClip() else {
+            notify(title: "No clip to export", body: "Save a clip first with ⌥⌘C.")
+            return
+        }
+        notify(title: "Exporting GIF…", body: url.lastPathComponent)
+        Task {
+            do {
+                let gif = try await GifExporter.export(clip: url)
+                await MainActor.run {
+                    self.notify(title: "GIF ready 🖼️", body: gif.lastPathComponent)
+                    NSWorkspace.shared.activateFileViewerSelecting([gif])
+                }
+            } catch {
+                await MainActor.run {
+                    self.notify(title: "GIF export failed", body: error.localizedDescription)
+                }
+            }
+        }
+    }
+
+    @objc private func openLibrary() {
+        // Menu actions arrive on the main thread; assumeIsolated bridges to @MainActor API.
+        let dir = clipsDir
+        MainActor.assumeIsolated {
+            ClipLibrary.shared.show(clipsDir: dir)
+        }
     }
 
     private func shareLastClip() {

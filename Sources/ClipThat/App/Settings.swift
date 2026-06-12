@@ -7,6 +7,10 @@ struct Settings: Codable {
     var autoUpload: Bool = false
     var fps: Int = 60
     var nativeResolution: Bool = false
+    var autoHighlight: Bool = false
+    var gameOnlyMode: Bool = false
+    var watermarkEnabled: Bool = false
+    var watermarkText: String = "ClipThat"
 
     /// Selectable replay-buffer lengths (seconds). Longer = more RAM (encoded video is kept
     /// in memory): roughly bitrateMbps/8 MB per second, e.g. 25 Mbps × 120s ≈ 375 MB.
@@ -31,6 +35,10 @@ struct Settings: Codable {
         autoUpload = (try? c.decode(Bool.self, forKey: .autoUpload)) ?? false
         fps = (try? c.decode(Int.self, forKey: .fps)) ?? 60
         nativeResolution = (try? c.decode(Bool.self, forKey: .nativeResolution)) ?? false
+        autoHighlight = (try? c.decode(Bool.self, forKey: .autoHighlight)) ?? false
+        gameOnlyMode = (try? c.decode(Bool.self, forKey: .gameOnlyMode)) ?? false
+        watermarkEnabled = (try? c.decode(Bool.self, forKey: .watermarkEnabled)) ?? false
+        watermarkText = (try? c.decode(String.self, forKey: .watermarkText)) ?? "ClipThat"
     }
 
     static let fileURL: URL = FileManager.default

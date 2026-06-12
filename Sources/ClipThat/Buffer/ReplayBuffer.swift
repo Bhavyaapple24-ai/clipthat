@@ -33,6 +33,10 @@ final class ReplayBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
     /// Called whenever capture state changes (running / interrupted-restarting). Set by the app.
     var onStatusChange: ((Bool) -> Void)?
 
+    /// Listens to the audio stream for loud-moment spikes (auto-highlight). Runs on the
+    /// audio queue; the app wires its onHighlight callback and toggles enabled.
+    let highlightDetector = HighlightDetector()
+
     // Rings + their format descriptions. Video and audio have SEPARATE locks so the two
     // capture callbacks never block each other — otherwise the busy video side hogs the
     // lock as the ring grows and ScreenCaptureKit stops delivering audio.
@@ -342,6 +346,8 @@ final class ReplayBuffer: NSObject, SCStreamOutput, SCStreamDelegate {
     }
 
     private func appendAudio(_ incoming: CMSampleBuffer) {
+        // Feed the auto-highlight detector before copying (it only reads, never retains).
+        highlightDetector.process(incoming)
         // Copy out of SCK's pool immediately; fall back to the original only if copy fails.
         let sample = copyAudioSampleBuffer(incoming) ?? incoming
         audioLock.lock(); defer { audioLock.unlock() }
