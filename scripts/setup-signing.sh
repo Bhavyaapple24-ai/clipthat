@@ -37,7 +37,10 @@ EOF
 openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
     -keyout "$TMP/key.pem" -out "$TMP/cert.pem" -config "$TMP/cfg.cnf" 2>/dev/null
 
-openssl pkcs12 -export -inkey "$TMP/key.pem" -in "$TMP/cert.pem" \
+# -legacy: OpenSSL 3.x defaults to PKCS12 algorithms (AES-256/PBKDF2) that macOS's
+# `security import` can't parse ("MAC verification failed"). -legacy emits the old
+# RC2/3DES format the Security framework accepts.
+openssl pkcs12 -export -legacy -inkey "$TMP/key.pem" -in "$TMP/cert.pem" \
     -name "$IDENTITY" -out "$TMP/id.p12" -passout pass:clipthat 2>/dev/null
 
 # Import key+cert and pre-authorize codesign to use the key (avoids repeated prompts).
